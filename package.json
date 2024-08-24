@@ -1,0 +1,11 @@
+{
+  "name": "multisig",
+  "main": "start.js",
+  "dependencies": {
+    "dotenv": "^6.2.0",
+    "steem": "^0.7.11"
+  },
+  "scripts": {
+    "start": "node start"
+  }
+}
