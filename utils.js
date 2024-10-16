@@ -112,8 +112,7 @@ function createPublishTx() {
 async function getCreatePublishTx(from) {
     return new Promise(async (resolve, reject) => {
 
-
-        const username = process.env.account
+        const username = process.env.ACCOUNT
         const [fromAccount] = await getAccount(from)
         const [account] = await getAccount(username)
         let from_json_metadata = {};

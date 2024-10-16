@@ -1,48 +1,50 @@
-require('dotenv').config()
+require('dotenv').config();
 const { createPublishTx, getCreatePublishTx, sendTx } = require('./utils');
 
 process.on('uncaughtException', err => {
-    console.error('Uncaught exception', err);
+    console.error('Uncaught exception:', err);
 });
 
 let lastHour = 0;
 let isProcessing = false;
-const account = process.env.ACCOUNT
-const multisigAccounts = process.env.MULTISIG_ACCOUNTS.split(' ')
-const isFirstAccount = multisigAccounts.indexOf(account) === 0
-const isLastAccount = multisigAccounts.indexOf(account) === multisigAccounts.length - 1
 
-const check = setInterval(() => {
-    if (!isProcessing) {
-        const currentHour = new Date().getUTCHours();
-        const currentMinutes = new Date().getMinutes();
-        console.log('...', currentHour, currentMinutes);
-        if (currentHour !== lastHour && currentMinutes > multisigAccounts.indexOf(account) + 1) {
-            isProcessing = true;
-            console.log('1/2 Start process', currentHour);
+const account = process.env.ACCOUNT;
+const multisigAccounts = process.env.MULTISIG_ACCOUNTS.split(' ');
+
+const accountIndex = multisigAccounts.indexOf(account);
+const isFirstAccount = accountIndex === 0;
+const isLastAccount = accountIndex === multisigAccounts.length - 1;
+
+const processTransactions = async () => {
+    const currentHour = new Date().getUTCHours();
+    const currentMinutes = new Date().getMinutes();
+    
+    console.log('Checking time:', currentHour, currentMinutes);
+    
+    if (currentHour !== lastHour && currentMinutes > accountIndex + 1) {
+        isProcessing = true;
+        console.log('Starting transaction process at hour:', currentHour);
+
+        try {
             if (isFirstAccount) {
-                createPublishTx().then((tx) => {
-                    lastHour = currentHour;
-                    lastTx = tx;
-                    isProcessing = false;
-                    console.log('2/2 Last signature sent at', lastHour);
-                })
+                const tx = await createPublishTx();
+                lastHour = currentHour;
+                console.log('Last signature sent at hour:', lastHour);
+            } else if (isLastAccount) {
+                await sendTx(multisigAccounts[accountIndex - 1]);
+                lastHour = currentHour;
+                console.log('Last transaction sent at hour:', lastHour);
+            } else {
+                await getCreatePublishTx(multisigAccounts[accountIndex - 1]);
+                lastHour = currentHour;
+                console.log('Last signature sent at hour:', lastHour);
             }
-            else if (isLastAccount) {
-                sendTx(multisigAccounts[multisigAccounts.indexOf(account) - 1]).then(() => {
-                    lastHour = currentHour;
-                    isProcessing = false;
-                    console.log('2/2 Last tx sent at', lastHour);
-                })
-            }
-            else
-                getCreatePublishTx(multisigAccounts[multisigAccounts.indexOf(account) - 1]).then(() => {
-                    lastHour = currentHour;
-                    isProcessing = false;
-                    console.log('2/2 Last signature sent at', lastHour);
-                }).catch(err => {
-                    console.error('Set last Signing failed, action required', err);
-                });
+        } catch (err) {
+            console.error('Error during transaction processing:', err);
+        } finally {
+            isProcessing = false;
         }
     }
-}, 1000 * 5);
+};
+
+const checkInterval = setInterval(processTransactions, 1000 * 5);
