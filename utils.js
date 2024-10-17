@@ -166,7 +166,11 @@ async function sendTx(from) {
             console.log(error)
         }
         let previousTx = JSON.parse(from_json_metadata.mtx)
-
+        
+        if (!transactionIsValid(previousTx.operations)) {
+            console.log('Transaction data mismatch');
+            throw new Error('Transaction data mismatch');
+        }
 
         const signedTransaction = steem.auth.signTransaction(previousTx, [process.env.ACTIVE_KEY]);
 
