@@ -51,6 +51,12 @@ function getAccount(account) {
     });
 }
 
+function transactionIsValid(transaction) {
+    return transaction[0][0] === 'transfer' &&
+    transaction[0][1].to === process.env.SEND_TO &&
+    transaction[0][1].amount === `${process.env.AMOUNT_SBD} SBD`;
+}
+
 function createPublishTx() {
     return new Promise(async (resolve, reject) => {
 
@@ -126,6 +132,11 @@ async function getCreatePublishTx(from) {
         }
         let previousTx = JSON.parse(from_json_metadata.mtx)
 
+        if (!transactionIsValid(previousTx.operations)) {
+            console.log('Transaction data mismatch');
+            throw new Error('Transaction data mismatch');
+        }
+        
         const signedTransaction = steem.auth.signTransaction(previousTx, [process.env.ACTIVE_KEY]);
         json_metadata.mtx = JSON.stringify(signedTransaction)
         let ops = [];
