@@ -60,7 +60,7 @@ function transactionIsValid(transaction) {
 function createPublishTx() {
     return new Promise(async (resolve, reject) => {
 
-        const username = process.env.account
+        const username = process.env.ACCOUNT
         const expireTime = 1000 * 3590;
         const globalProps = await getDynamicGlobalProperties();
         const ref_block_num = globalProps.head_block_number & 0xFFFF;
