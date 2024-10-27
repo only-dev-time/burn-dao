@@ -15,6 +15,12 @@ const accountIndex = multisigAccounts.indexOf(account);
 const isFirstAccount = accountIndex === 0;
 const isLastAccount = accountIndex === multisigAccounts.length - 1;
 
+const context = {
+    username: account,
+    multisigAccounts,
+    accountIndex
+};
+
 const processTransactions = async () => {
     const currentHour = new Date().getUTCHours();
     const currentMinutes = new Date().getMinutes();
@@ -31,11 +37,11 @@ const processTransactions = async () => {
                 lastHour = currentHour;
                 console.log('Last signature sent at hour:', lastHour);
             } else if (isLastAccount) {
-                await sendTx(multisigAccounts[accountIndex - 1]);
+                await sendTx(context);
                 lastHour = currentHour;
                 console.log('Last transaction sent at hour:', lastHour);
             } else {
-                await getCreatePublishTx(multisigAccounts[accountIndex - 1]);
+                await getCreatePublishTx(context);
                 lastHour = currentHour;
                 console.log('Last signature sent at hour:', lastHour);
             }
