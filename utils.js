@@ -177,6 +177,7 @@ async function getCreatePublishTx(context) {
 async function sendTx(context) {
     return new Promise(async (resolve, reject) => {
 
+        const { accountIndex } = context;
         let from = getPreviousAccountName(context);
         let from_json_metadata = await getJsonMetadata(from);
 
