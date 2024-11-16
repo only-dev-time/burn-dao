@@ -16,7 +16,7 @@ const isFirstAccount = accountIndex === 0;
 const isLastAccount = accountIndex === multisigAccounts.length - 1;
 
 const context = {
-    username: account,
+    accountName: account,
     multisigAccounts,
     accountIndex
 };
@@ -46,11 +46,11 @@ const processTransactions = async () => {
                 console.log('Last signature sent at hour:', lastHour);
             }
         } catch (err) {
-            console.error('Error during transaction processing:', err);
+            console.error('Error during transaction processing:', err.message);
         } finally {
             isProcessing = false;
         }
     }
 };
 
-const checkInterval = setInterval(processTransactions, 1000 * 5);
+const checkInterval = setInterval(processTransactions, 1000 * 15);

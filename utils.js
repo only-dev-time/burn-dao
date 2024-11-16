@@ -131,80 +131,88 @@ function createPublishTx() {
 async function getCreatePublishTx(context) {
     return new Promise(async (resolve, reject) => {
 
-        const { username, accountIndex } = context;
-        let from = getPreviousAccountName(context);
-        let from_json_metadata = await getJsonMetadata(from);
-        let json_metadata = await getJsonMetadata(username);
+        try {
+            const { accountName, accountIndex } = context;
+            let json_metadata = await getJsonMetadata(accountName);
+            let previousAccountName = getPreviousAccountName(context);
+            let previous_json_metadata = await getJsonMetadata(previousAccountName);
 
-        let previousTx = JSON.parse(from_json_metadata.mtx)
+            let previousTx = JSON.parse(previous_json_metadata.mtx)
 
-        if (accountIndex > 1 && transactionIsExpired(previousTx)) {
-            console.log('Transaction expired, get transaction from second last account');
+            if (accountIndex > 1 && transactionIsExpired(previousTx)) {
+                console.log(`Transaction from '${previousAccountName}' expired, get transaction from second last account`);
 
-            from = getPreviousAccountName({ ...context, accountIndex: accountIndex - 1 });
-            from_json_metadata = await getJsonMetadata(from);
-            previousTx = JSON.parse(from_json_metadata.mtx)
+                previousAccountName = getPreviousAccountName({ ...context, accountIndex: accountIndex - 1 });
+                previous_json_metadata = await getJsonMetadata(previousAccountName);
+                previousTx = JSON.parse(previous_json_metadata.mtx)
+            }
+
+            if (!transactionIsValid(previousTx.operations)) {
+                console.log(`Transaction data from '${previousAccountName}' mismatch`);
+                throw new Error(`Transaction data from '${previousAccountName}' mismatch`);
+            }
+            
+            if (transactionIsExpired(previousTx)) {
+                console.log(`Transaction from '${previousAccountName}' expired, no more transactions to get`);
+                throw new Error('Transactions expired');
+            }
+
+            const signedTransaction = steem.auth.signTransaction(previousTx, [process.env.ACTIVE_KEY]);
+            json_metadata.mtx = JSON.stringify(signedTransaction)
+            let ops = [];
+            ops.push(
+                [
+                    'account_update2',
+                    {
+                        account: accountName,
+                        json_metadata: "",
+                        posting_json_metadata: JSON.stringify(json_metadata)
+                    },
+                ])
+            let finalTx = { operations: ops, extensions: [] };
+            const tx = await sendTransaction(finalTx, { posting: process.env.POSTING_KEY })
+            resolve(tx)
+        } catch (error) {
+            reject(error)
         }
-
-        if (!transactionIsValid(previousTx.operations)) {
-            console.log('Transaction data mismatch');
-            throw new Error('Transaction data mismatch');
-        }
-        
-        if (transactionIsExpired(previousTx)) {
-            console.log('Transaction expired, no more transactions to get');
-            throw new Error('Transaction expired');
-        }
-
-        const signedTransaction = steem.auth.signTransaction(previousTx, [process.env.ACTIVE_KEY]);
-        json_metadata.mtx = JSON.stringify(signedTransaction)
-        let ops = [];
-        ops.push(
-            [
-                'account_update2',
-                {
-                    account: username,
-                    json_metadata: "",
-                    posting_json_metadata: JSON.stringify(json_metadata)
-                },
-            ])
-        let finalTx = { operations: ops, extensions: [] };
-        const tx = await sendTransaction(finalTx, { posting: process.env.POSTING_KEY })
-        resolve(tx)
     })
 }
 
 async function sendTx(context) {
     return new Promise(async (resolve, reject) => {
 
-        const { accountIndex } = context;
-        let from = getPreviousAccountName(context);
-        let from_json_metadata = await getJsonMetadata(from);
+        try {
+            const { accountIndex } = context;
+            let from = getPreviousAccountName(context);
+            let from_json_metadata = await getJsonMetadata(from);
 
-        let previousTx = JSON.parse(from_json_metadata.mtx)
-        
-        if (accountIndex > 1 && transactionIsExpired(previousTx)) {
-            console.log('Transaction expired, get transaction from second last account');
+            let previousTx = JSON.parse(from_json_metadata.mtx)
+            
+            if (accountIndex > 1 && transactionIsExpired(previousTx)) {
+                console.log(`Transaction from '${from}' expired, get transaction from second last account`);
 
-            from = getPreviousAccountName({ ...context, accountIndex: accountIndex - 1 });
-            from_json_metadata = await getJsonMetadata(from);
-            previousTx = JSON.parse(from_json_metadata.mtx)
+                from = getPreviousAccountName({ ...context, accountIndex: accountIndex - 1 });
+                from_json_metadata = await getJsonMetadata(from);
+                previousTx = JSON.parse(from_json_metadata.mtx)
+            }
+            
+            if (!transactionIsValid(previousTx.operations)) {
+                console.log(`Transaction data from '${from}' mismatch`);
+                throw new Error(`Transaction data from '${from}' mismatch`);
+            }
+
+            if (transactionIsExpired(previousTx)) {
+                console.log(`Transaction from '${from}' expired, no more transactions to get`);
+                throw new Error('Transactions expired');
+            }
+
+            const signedTransaction = steem.auth.signTransaction(previousTx, [process.env.ACTIVE_KEY]);
+
+            const tx = await broadcastTransaction(signedTransaction)
+            resolve(tx)
+        } catch (error) {
+            reject(error)
         }
-        
-        if (!transactionIsValid(previousTx.operations)) {
-            console.log('Transaction data mismatch');
-            throw new Error('Transaction data mismatch');
-        }
-
-        if (transactionIsExpired(previousTx)) {
-            console.log('Transaction expired, no more transactions to get');
-            throw new Error('Transaction expired');
-        }
-
-        const signedTransaction = steem.auth.signTransaction(previousTx, [process.env.ACTIVE_KEY]);
-
-        const tx = await broadcastTransaction(signedTransaction)
-        resolve(tx)
     })
 }
 
