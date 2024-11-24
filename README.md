@@ -36,3 +36,4 @@ This tool makes a chaining of signature to use the multisig feature on Steem to 
 - MULTISIG_ACCOUNTS=funditionms funditionms1 funditionms2 funditionms3  #list of accounts used for chaining
 - AMOUNT_SBD=0.001 #amount of SBD to send (only used for type = transfer; remaining SBD will be transferred back to DAO)
 - SEND_TO=future.witness #to whom the funds should be send (only used for type = transfer)
+- MARKET_MINUTE=11 #minute of each hour in which SBD are sold (only used for type = burn)
