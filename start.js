@@ -8,6 +8,7 @@ process.on('uncaughtException', err => {
 let lastHour = 0;
 let isProcessing = false;
 
+const processType = process.env.PROCESS_TYPE;
 const account = process.env.ACCOUNT;
 const multisigAccounts = process.env.MULTISIG_ACCOUNTS.split(' ');
 
@@ -21,13 +22,27 @@ const context = {
     accountIndex
 };
 
+const shouldProcessStart = (currentHour, currentMinutes) => {
+    // start processing once per hour
+    if (currentHour == lastHour) 
+        return false;
+    switch (processType) {
+        case 'transfer':
+            // start processing 1 minute after the previous account
+            return currentMinutes > accountIndex + 1;
+        case 'burn':
+            // start processing at MARKET_MINUTE
+            return currentMinutes == parseInt(process.env.MARKET_MINUTE);
+    }
+};
+
 const processTransactions = async () => {
     const currentHour = new Date().getUTCHours();
     const currentMinutes = new Date().getMinutes();
     
     console.log('Checking time:', currentHour, currentMinutes);
     
-    if (currentHour !== lastHour && currentMinutes > accountIndex + 1) {
+    if (shouldProcessStart(currentHour, currentMinutes)) {
         isProcessing = true;
         console.log('Starting transaction process at hour:', currentHour);
 
@@ -53,4 +68,4 @@ const processTransactions = async () => {
     }
 };
 
-const checkInterval = setInterval(processTransactions, 1000 * 15);
+const checkInterval = setInterval(processTransactions, 1000 * (processType == 'transfer' ? 15 : 5));
