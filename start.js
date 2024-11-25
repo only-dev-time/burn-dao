@@ -22,7 +22,7 @@ const context = {
     accountIndex
 };
 
-const shouldProcessStart = (currentHour, currentMinutes) => {
+const shouldProcessStart = (currentHour, currentMinutes, currentSeconds) => {
     // start processing once per hour
     if (currentHour == lastHour) 
         return false;
@@ -31,18 +31,24 @@ const shouldProcessStart = (currentHour, currentMinutes) => {
             // start processing 1 minute after the previous account
             return currentMinutes > accountIndex + 1;
         case 'burn':
-            // start processing at MARKET_MINUTE
-            return currentMinutes == parseInt(process.env.MARKET_MINUTE);
+            // start processing at MARKET_MINUTE and after the previous account
+            const marketMinute = parseInt(process.env.MARKET_MINUTE);
+            const startSeconds = accountIndex * 15; // max 4 accounts in chain
+            const endSeconds = startSeconds + 11;
+            return currentMinutes == marketMinute && 
+                currentSeconds >= startSeconds && currentSeconds <= endSeconds;
     }
 };
 
 const processTransactions = async () => {
-    const currentHour = new Date().getUTCHours();
-    const currentMinutes = new Date().getMinutes();
+    const now = new Date();
+    const currentHour = now.getUTCHours();
+    const currentMinutes = now.getUTCMinutes();
+    const currentSeconds = now.getSeconds();
     
-    console.log('Checking time:', currentHour, currentMinutes);
+    console.log('Checking time:', currentHour, currentMinutes, currentSeconds);
     
-    if (shouldProcessStart(currentHour, currentMinutes)) {
+    if (shouldProcessStart(currentHour, currentMinutes, currentSeconds)) {
         isProcessing = true;
         console.log('Starting transaction process at hour:', currentHour);
 
@@ -68,4 +74,5 @@ const processTransactions = async () => {
     }
 };
 
-const checkInterval = setInterval(processTransactions, 1000 * (processType == 'transfer' ? 15 : 5));
+const intervalSeconds = processType == 'transfer' ? 15 : 5;
+const checkInterval = setInterval(processTransactions, 1000 * intervalSeconds);
