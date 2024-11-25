@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { createPublishTx, getCreatePublishTx, sendTx } = require('./utils');
+const { createPublishTx, signSendTx, signPublishTx } = require('./utils');
 
 process.on('uncaughtException', err => {
     console.error('Uncaught exception:', err);
@@ -11,6 +11,7 @@ let isProcessing = false;
 const processType = process.env.PROCESS_TYPE;
 const account = process.env.ACCOUNT;
 const multisigAccounts = process.env.MULTISIG_ACCOUNTS.split(' ');
+const metadataKey = processType === 'transfer' ? 'ttx' : 'btx'
 
 const accountIndex = multisigAccounts.indexOf(account);
 const isFirstAccount = accountIndex === 0;
@@ -19,7 +20,8 @@ const isLastAccount = accountIndex === multisigAccounts.length - 1;
 const context = {
     accountName: account,
     multisigAccounts,
-    accountIndex
+    accountIndex,
+    metadataKey
 };
 
 const shouldProcessStart = (currentHour, currentMinutes, currentSeconds) => {
@@ -54,15 +56,15 @@ const processTransactions = async () => {
 
         try {
             if (isFirstAccount) {
-                const tx = await createPublishTx();
+                await createPublishTx(context);
                 lastHour = currentHour;
                 console.log('Last signature sent at hour:', lastHour);
             } else if (isLastAccount) {
-                await sendTx(context);
+                await signSendTx(context);
                 lastHour = currentHour;
                 console.log('Last transaction sent at hour:', lastHour);
             } else {
-                await getCreatePublishTx(context);
+                await signPublishTx(context);
                 lastHour = currentHour;
                 console.log('Last signature sent at hour:', lastHour);
             }
@@ -74,5 +76,6 @@ const processTransactions = async () => {
     }
 };
 
+// burn_chain is more time-critical
 const intervalSeconds = processType == 'transfer' ? 15 : 5;
 const checkInterval = setInterval(processTransactions, 1000 * intervalSeconds);
