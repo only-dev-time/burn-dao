@@ -25,7 +25,7 @@ const context = {
 };
 
 const shouldProcessStart = (currentHour, currentMinutes, currentSeconds) => {
-    // start processing once per hour
+    // start processing only once per hour
     if (currentHour == lastHour) 
         return false;
     switch (processType) {

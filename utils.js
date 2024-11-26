@@ -118,14 +118,14 @@ async function getPreviousTransaction(context) {
         previousTx = JSON.parse(previous_json_metadata[metadataKey])
     }
 
-    if (!transactionIsValid(previousTx.operations, context)) {
+    if (!transactionIsValid(previousTx.operations)) {
         // console.log(`Transaction data from '${previousAccountName}' mismatch`);
-        throw new Error(`Transaction data from '${previousAccountName}' mismatch`);
+        throw new Error(`Transaction from '${previousAccountName}' invalid\noperations: '${JSON.stringify(previousTx.operations)}'`);
     }
     
     if (transactionIsExpired(previousTx)) {
         // console.log(`Transaction from '${previousAccountName}' expired, no more transactions to get`);
-        throw new Error('Transactions expired');
+        throw new Error(`Transactions from '${previousAccountName}' expired\nexpiration: '${previousTx.expiration}'`);
     }
 
     return previousTx;
@@ -208,25 +208,29 @@ function getOrderOperation(account, orderid, amount, unit) {
 function createPublishTx(context) {
     return new Promise(async (resolve, reject) => {
         
-        const { accountName, metadataKey } = context;
+        try {
+            const { accountName, metadataKey } = context;
 
-        // create transaction with necessary operations
-        let transaction = await getBlankTransaction();
-        transaction.operations = await getOperations();
-        const signedTransaction = steem.auth.signTransaction(transaction, [process.env.ACTIVE_KEY]);
+            // create transaction with necessary operations
+            let transaction = await getBlankTransaction();
+            transaction.operations = await getOperations();
+            const signedTransaction = steem.auth.signTransaction(transaction, [process.env.ACTIVE_KEY]);
 
-        // add signed transaction to account metadata
-        let json_metadata = await getJsonMetadata(accountName);
-        json_metadata[metadataKey] = JSON.stringify(signedTransaction)
+            // add signed transaction to account metadata
+            let json_metadata = await getJsonMetadata(accountName);
+            json_metadata[metadataKey] = JSON.stringify(signedTransaction)
 
-        // update account metadata with signed transaction
-        const ops = [
-            getAccountUpdateOperation(accountName, JSON.stringify(json_metadata))
-        ];
-        let finalTx = { operations: ops, extensions: [] };
-        const tx = await sendTransaction(finalTx, { posting: process.env.POSTING_KEY })
-        
-        resolve(tx)
+            // update account metadata with signed transaction
+            const ops = [
+                getAccountUpdateOperation(accountName, JSON.stringify(json_metadata))
+            ];
+            let finalTx = { operations: ops, extensions: [] };
+            const tx = await sendTransaction(finalTx, { posting: process.env.POSTING_KEY })
+            
+            resolve(tx)
+        } catch (error) {
+            reject(error)
+        }
     })
 }
 
