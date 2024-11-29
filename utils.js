@@ -198,6 +198,7 @@ async function getOperations() {
                     'DAO amount not used for selling and burning') // TODO for testing
                 )
             }
+            break;
         case 'burn':
             // transfer all STEEM to null
             const steemBalance = await getBalance(process.env.MULTISIG_ACCOUNT, 'STEEM');
@@ -231,6 +232,7 @@ async function getOperations() {
                     steemToBuy) // TODO for testing
                 )
             }
+            break;
     }
     if (ops.length === 0) {
         throw new Error('No operations generated (sbd and steem balance is 0)');
@@ -319,6 +321,7 @@ function createPublishTx(context) {
             // add signed transaction to account metadata
             let json_metadata = await getJsonMetadata(accountName);
             json_metadata[metadataKey] = JSON.stringify(signedTransaction)
+            delete json_metadata['mtx']
 
             // update account metadata with signed transaction
             const ops = [

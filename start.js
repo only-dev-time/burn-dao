@@ -44,7 +44,7 @@ const shouldProcessStart = (currentTime) => {
             const startSeconds = accountIndex * 15; // max 4 accounts in chain
             const endSeconds = startSeconds + 11;
             return currentTime.minutes == marketMinute && 
-            currentTime.seconds >= startSeconds && currentTime.seconds <= endSeconds;
+                currentTime.seconds >= startSeconds && currentTime.seconds <= endSeconds;
     }
 };
 
