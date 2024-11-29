@@ -321,7 +321,6 @@ function createPublishTx(context) {
             // add signed transaction to account metadata
             let json_metadata = await getJsonMetadata(accountName);
             json_metadata[metadataKey] = JSON.stringify(signedTransaction)
-            delete json_metadata['mtx']
 
             // update account metadata with signed transaction
             const ops = [
