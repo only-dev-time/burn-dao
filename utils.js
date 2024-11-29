@@ -1,6 +1,6 @@
+const { parse } = require('dotenv');
 const steem = require('steem');
 require('dotenv').config();
-
 
 function getDynamicGlobalProperties() {
     return new Promise((resolve, reject) => {
@@ -50,21 +50,41 @@ function getAccount(account) {
     });
 }
 
+function getOrderBook() {
+    return new Promise((resolve, reject) => {
+        steem.api.getOrderBook(20, (err, result) => {
+            if (err) {
+                reject(err);
+            } else {
+                resolve(result);
+            }
+        });
+    });
+}
+
 function transactionIsValid(operations) {
+    // max 2 operations allowed
+    // transfer: transfer to market account and transfer back to dao account
+    // burn: transfer to null account and sell SBD
+    if (operations.length > 2) {
+        return false;
+    }
     switch (process.env.PROCESS_TYPE) {
         case 'transfer':
-            // max 2 operations allowed
-            // transfer to market account and transfer back to dao account
-            if (operations.length > 2) {
-                return false;
-            }
             // allowed are only transfer operations
             // and to accounts specified in allowedAccounts
             //const allowedAccounts = [process.env.SEND_TO, "steem.dao"];
-            const allowedAccounts = [process.env.SEND_TO, "moecki.tests"]; // for testing
+            const allowedAccounts = [process.env.SEND_TO, "moecki.tests"]; // TODO for testing
             return operations.every(operation => 
                 operation[0] === 'transfer' &&
                 allowedAccounts.includes(operation[1].to)
+            );
+        case 'burn':
+            // allowed are only transfer to null and limit_order_create operations
+            return operations.every(operation => 
+                operation[0] === 'limit_order_create' ||
+                // (operation[0] === 'transfer' && operation[1].to === "null")
+                (operation[0] === 'transfer' && operation[1].to === "moecki.tests") // TODO for testing
             );
     }
 }
@@ -147,42 +167,80 @@ async function getBlankTransaction() {
 }
 
 async function getOperations() {
+    let ops = [];
+    const sbdBalance = await getBalance(process.env.MULTISIG_ACCOUNT, 'SBD');
     switch (process.env.PROCESS_TYPE) {
         case 'transfer':
-            let ops = [];
-            // transfer AMOUNT_SBD to market account
-            const sbd_balance = await getBalance(process.env.MULTISIG_ACCOUNT, 'SBD');
-            const to_market = Math.min(sbd_balance, parseFloat(process.env.AMOUNT_SBD));
-            ops.push(getTransferOperation(
-                to_market, 
-                'SBD', 
-                process.env.MULTISIG_ACCOUNT, 
-                process.env.SEND_TO,
-                'DAO amount for selling and burning')
-            )
-            // transfer remaining amounts back to dao
-            const to_dao = sbd_balance - to_market;
-            // ops.push(getTransferOperation(
-            //     to_dao, 
-            //     'SBD', 
-            //     process.env.MULTISIG_ACCOUNT, 
-            //     'steem.dao',
-            //     'DAO amount not used for selling and burning')
-            // )
-            ops.push(getTransferOperation(
-                0.001, 
-                'SBD', 
-                process.env.MULTISIG_ACCOUNT, 
-                'moecki.tests',
-                'DAO amount not used for selling and burning') // for testing
-            )
-            return ops;
+            if (sbdBalance > 0) {
+                // transfer AMOUNT_SBD to market account
+                const sbdToMarket = Math.min(sbdBalance, parseFloat(process.env.AMOUNT_SBD));
+                ops.push(getTransferOperation(
+                    sbdToMarket, 
+                    'SBD', 
+                    process.env.MULTISIG_ACCOUNT, 
+                    process.env.SEND_TO,
+                    'DAO amount for selling and burning')
+                )
+                // transfer remaining amounts back to dao
+                const sbdToDao = sbdBalance - sbdToMarket;
+                // ops.push(getTransferOperation(
+                //     sbdToDao, 
+                //     'SBD', 
+                //     process.env.MULTISIG_ACCOUNT, 
+                //     'steem.dao',
+                //     'DAO amount not used for selling and burning')
+                // )
+                ops.push(getTransferOperation(
+                    0.001, 
+                    'SBD', 
+                    process.env.MULTISIG_ACCOUNT, 
+                    'moecki.tests',
+                    'DAO amount not used for selling and burning') // TODO for testing
+                )
+            }
         case 'burn':
+            // transfer all STEEM to null
+            const steemBalance = await getBalance(process.env.MULTISIG_ACCOUNT, 'STEEM');
+            if (steemBalance > 0) {
+                // ops.push(getTransferOperation(
+                    //     steemBalance,
+                    //     'STEEM',
+                    //     process.env.MULTISIG_ACCOUNT,
+                    //     'null',
+                    //     'Burning STEEM from sold DAO funds')
+                    // )
+                ops.push(getTransferOperation(
+                    steemBalance,
+                    'STEEM',
+                    process.env.MULTISIG_ACCOUNT,
+                    'moecki.tests',
+                    'Burning STEEM from sold SBD') // TODO for testing
+                )
+            }
+            if (sbdBalance > 0) {
+                // sell all SBD on internal market
+                const steemToBuy = await getSteemToBuy(0.001);
+                // ops.push(getOrderOperation(
+                //     process.env.MULTISIG_ACCOUNT,
+                //     sbdBalance,
+                //     steemToBuy)
+                // )
+                ops.push(getOrderOperation(
+                    process.env.MULTISIG_ACCOUNT,
+                    0.001,
+                    steemToBuy) // TODO for testing
+                )
+            }
     }
+    if (ops.length === 0) {
+        throw new Error('No operations generated (sbd and steem balance is 0)');
+    }
+    return ops;
 }
 
 function getAccountUpdateOperation(accountName, posting_json_metadata) {
-    return ['account_update2',
+    return [
+        'account_update2',
         {
             'account': accountName,
             'json_metadata': '',
@@ -192,7 +250,8 @@ function getAccountUpdateOperation(accountName, posting_json_metadata) {
 }
 
 function getTransferOperation(amount, unit, from, to, memo = '') {
-    return ['transfer',
+    return [
+        'transfer',
         {
             'amount': amount + ' ' + unit.toUpperCase(),
             'from': from,
@@ -202,7 +261,48 @@ function getTransferOperation(amount, unit, from, to, memo = '') {
     ];
 }
 
-function getOrderOperation(account, orderid, amount, unit) {
+function getOrderOperation(account, sbdToSell, steemToBuy) {
+    const orderId = Math.floor(Date.now() / 1000);
+    const expireTime = 1000 * 120; // TODO without test 1000*3000
+    return [
+        'limit_order_create',
+        {
+            'owner': account,
+            'orderid': orderId,
+            'amount_to_sell': sbdToSell + ' SBD',
+            'min_to_receive': steemToBuy + ' STEEM',
+            'fill_or_kill': false,
+            'expiration': new Date(Date.now() + expireTime).toISOString().slice(0, -5)
+        }
+    ];
+}
+
+async function getSteemToBuy(sbdToSell) {
+    const orderBook = await getOrderBook();
+    
+    let sbd = 0;
+    let i = 0;
+    let real_price = '';
+    
+    // SBD and STEEM amounts are stored as integers
+    const precision = 3;
+    sbdToSell *= 10 ** precision;
+    
+    // get STEEM amount to sell all SBD
+    // loop over all asks until enough SBD are available
+    // last real_price is the price to sell all SBD
+    while (sbd < sbdToSell) {
+        sbd += orderBook.asks[i].sbd;
+        real_price = orderBook.asks[i].real_price;
+        i++;
+    }
+    // console.log('real_price:', real_price);
+    let price = parseFloat(real_price);
+    // add a markup to sale in any case (0.5%)
+    price *= 1.005;
+    // console.log('price:', price);
+
+    return parseInt(sbdToSell / price) / 10 ** precision;
 }
 
 function createPublishTx(context) {

@@ -24,48 +24,56 @@ const context = {
     metadataKey
 };
 
-const shouldProcessStart = (currentHour, currentMinutes, currentSeconds) => {
+const shouldProcessStart = (currentTime) => {
     // start processing only once per hour
-    if (currentHour == lastHour) 
+    if (currentTime.hour == lastHour) 
         return false;
     switch (processType) {
         case 'transfer':
             // start processing 1 minute after the previous account
-            return currentMinutes > accountIndex + 1;
+            return currentTime.minutes > accountIndex + 1;
         case 'burn':
+            // TODO for testing
+            // return true;
+            // ----------------
             // start processing at MARKET_MINUTE and after the previous account
             const marketMinute = parseInt(process.env.MARKET_MINUTE);
+            // TODO for testing
+            // const marketMinute = currentTime.minutes + (currentTime.minutes % 2 == 0 ? 0 : 1);
+            // ----------------
             const startSeconds = accountIndex * 15; // max 4 accounts in chain
             const endSeconds = startSeconds + 11;
-            return currentMinutes == marketMinute && 
-                currentSeconds >= startSeconds && currentSeconds <= endSeconds;
+            return currentTime.minutes == marketMinute && 
+            currentTime.seconds >= startSeconds && currentTime.seconds <= endSeconds;
     }
 };
 
 const processTransactions = async () => {
     const now = new Date();
-    const currentHour = now.getUTCHours();
-    const currentMinutes = now.getUTCMinutes();
-    const currentSeconds = now.getSeconds();
+    const currentTime = {
+        hour: now.getUTCHours(),
+        minutes: now.getUTCMinutes(),
+        seconds: now.getSeconds(),
+    }
     
-    console.log('Checking time:', currentHour, currentMinutes, currentSeconds);
+    console.log('Checking time:', currentTime.hour, currentTime.minutes, currentTime.seconds);
     
-    if (shouldProcessStart(currentHour, currentMinutes, currentSeconds)) {
+    if (!isProcessing && shouldProcessStart(currentTime)) {
         isProcessing = true;
-        console.log('Starting transaction process at hour:', currentHour);
+        console.log('Starting transaction process at hour:', currentTime.hour);
 
         try {
             if (isFirstAccount) {
                 await createPublishTx(context);
-                lastHour = currentHour;
+                lastHour = currentTime.hour;
                 console.log('Last signature sent at hour:', lastHour);
             } else if (isLastAccount) {
                 await signSendTx(context);
-                lastHour = currentHour;
+                lastHour = currentTime.hour;
                 console.log('Last transaction sent at hour:', lastHour);
             } else {
                 await signPublishTx(context);
-                lastHour = currentHour;
+                lastHour = currentTime.hour;
                 console.log('Last signature sent at hour:', lastHour);
             }
         } catch (err) {
