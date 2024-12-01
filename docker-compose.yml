@@ -1,0 +1,12 @@
+services:
+  transfer:
+    build: .
+    volumes:
+      - ./.env-transfer:/usr/src/app/.env
+    container_name: transfer-process
+
+  burn:
+    build: .
+    volumes:
+      - ./.env-burn:/usr/src/app/.env
+    container_name: burn-process
