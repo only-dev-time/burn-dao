@@ -183,20 +183,22 @@ async function getOperations() {
                 )
                 // transfer remaining amounts back to dao
                 const sbdToDao = sbdBalance - sbdToMarket;
-                // ops.push(getTransferOperation(
-                //     sbdToDao, 
-                //     'SBD', 
-                //     process.env.MULTISIG_ACCOUNT, 
-                //     'steem.dao',
-                //     'DAO amount not used for selling and burning')
-                // )
-                ops.push(getTransferOperation(
-                    0.001, 
-                    'SBD', 
-                    process.env.MULTISIG_ACCOUNT, 
-                    'moecki.tests',
-                    'DAO amount not used for selling and burning') // TODO for testing
-                )
+                if (sbdToDao > 0) {                    
+                    // ops.push(getTransferOperation(
+                    //     sbdToDao, 
+                    //     'SBD', 
+                    //     process.env.MULTISIG_ACCOUNT, 
+                    //     'steem.dao',
+                    //     'DAO amount not used for selling and burning')
+                    // )
+                    ops.push(getTransferOperation(
+                        0.001, 
+                        'SBD', 
+                        process.env.MULTISIG_ACCOUNT, 
+                        'moecki.tests',
+                        'TEST: DAO amount not used for selling and burning (prod. receiver: @steem.dao)') // TODO for testing
+                    )
+                }
             }
             break;
         case 'burn':
@@ -215,7 +217,7 @@ async function getOperations() {
                     'STEEM',
                     process.env.MULTISIG_ACCOUNT,
                     'moecki.tests',
-                    'Burning STEEM from sold SBD') // TODO for testing
+                    'TEST: Burning STEEM from sold SBD (prod. receiver: @null)') // TODO for testing
                 )
             }
             if (sbdBalance > 0) {
