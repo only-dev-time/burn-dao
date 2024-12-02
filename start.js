@@ -24,6 +24,7 @@ const context = {
     metadataKey
 };
 
+// check if processing should start based on the process type
 const shouldProcessStart = (currentTime) => {
     // start processing only once per hour
     if (currentTime.hour == lastHour) 
@@ -48,6 +49,7 @@ const shouldProcessStart = (currentTime) => {
     }
 };
 
+// main function to process transactions for multisig accounts defined in .env
 const processTransactions = async () => {
     const now = new Date();
     const currentTime = {
