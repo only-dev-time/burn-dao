@@ -1,7 +1,10 @@
-const { parse } = require('dotenv');
 const steem = require('steem');
 require('dotenv').config();
 
+// ----------------------------------------------
+// blockchain data functions
+// ----------------------------------------------
+// get dynamic global properties from blockchain
 function getDynamicGlobalProperties() {
     return new Promise((resolve, reject) => {
         steem.api.getDynamicGlobalProperties((err, result) => {
@@ -14,6 +17,7 @@ function getDynamicGlobalProperties() {
     });
 }
 
+// send unsigned transaction to blockchain
 function sendTransaction(transaction, privateKey) {
     return new Promise((resolve, reject) => {
         steem.broadcast.send(transaction, privateKey, (err, result) => {
@@ -26,6 +30,7 @@ function sendTransaction(transaction, privateKey) {
     });
 }
 
+// broadcast signed transaction to blockchain
 function broadcastTransaction(signedTransaction) {
     return new Promise((resolve, reject) => {
         steem.api.broadcastTransaction(signedTransaction, (err, result) => {
@@ -38,6 +43,7 @@ function broadcastTransaction(signedTransaction) {
     });
 }
 
+// get account data from blockchain
 function getAccount(account) {
     return new Promise((resolve, reject) => {
         steem.api.getAccounts([account], (err, result) => {
@@ -50,6 +56,7 @@ function getAccount(account) {
     });
 }
 
+// get order book from internal market
 function getOrderBook() {
     return new Promise((resolve, reject) => {
         steem.api.getOrderBook(20, (err, result) => {
@@ -62,6 +69,52 @@ function getOrderBook() {
     });
 }
 
+// ----------------------------------------------
+// blockchain data helper functions
+// ----------------------------------------------
+// get account metadata from blockchain
+async function getJsonMetadata(accountName) {
+    const [account] = await getAccount(accountName)
+
+    let json_metadata = {};
+    try {
+        json_metadata = JSON.parse(account.posting_json_metadata)
+    } catch (error) {
+        console.log(error)
+    }
+    return json_metadata;
+}
+
+// get account balance from blockchain
+async function getBalance(accountName, unit) {
+    const [account] = await getAccount(accountName)
+
+    const key = unit === 'STEEM' ? 'balance' : 'sbd_balance';
+    const balance = account[key].split(' ')[0]
+    
+    return parseFloat(balance);
+}
+
+// ----------------------------------------------
+// transaction helper functions
+// ----------------------------------------------
+// get blank transaction object for new transaction
+async function getBlankTransaction() {
+    const expireTime = 1000 * 3000;
+    const globalProps = await getDynamicGlobalProperties();
+    const ref_block_num = globalProps.head_block_number & 0xFFFF;
+    const ref_block_prefix = Buffer.from(globalProps.head_block_id, 'hex').readUInt32LE(4);
+
+    return {
+        ref_block_num,
+        ref_block_prefix,
+        expiration: new Date(Date.now() + expireTime).toISOString().slice(0, -5),
+        operations: [],
+        extensions: []
+    };
+}
+
+// check if transaction is valid for the purpose of selling and burning
 function transactionIsValid(operations) {
     // max 2 operations allowed
     // transfer: transfer to market account and transfer back to dao account
@@ -89,83 +142,15 @@ function transactionIsValid(operations) {
     }
 }
 
+// check if transaction is expired
 function transactionIsExpired(transaction) {
     return new Date(transaction.expiration) < new Date();
 }
 
-function getPreviousAccountName(context) {
-    return context.accountIndex > 0 ? context.multisigAccounts[context.accountIndex - 1] : null;
-}
-
-async function getJsonMetadata(accountName) {
-    const [account] = await getAccount(accountName)
-
-    let json_metadata = {};
-    try {
-        json_metadata = JSON.parse(account.posting_json_metadata)
-    } catch (error) {
-        console.log(error)
-    }
-    return json_metadata;
-}
-
-async function getBalance(accountName, unit) {
-    const [account] = await getAccount(accountName)
-
-    const key = unit === 'STEEM' ? 'balance' : 'sbd_balance';
-    const balance = account[key].split(' ')[0]
-    
-    return parseFloat(balance);
-}
-
-async function getPreviousTransaction(context) {
-    const { accountIndex, metadataKey } = context;
-    let previousAccountName = getPreviousAccountName(context);
-    let previous_json_metadata = await getJsonMetadata(previousAccountName);
-
-    if (!previous_json_metadata[metadataKey]) {
-        // console.log(`No transaction data found in '${previousAccountName}'`);
-        throw new Error(`No transaction data found in '${previousAccountName}'`);
-    }
-
-    let previousTx = JSON.parse(previous_json_metadata[metadataKey])
-
-    if (accountIndex > 1 && transactionIsExpired(previousTx)) {
-        console.log(`Transaction from '${previousAccountName}' expired, get transaction from second last account`);
-
-        previousAccountName = getPreviousAccountName({ ...context, accountIndex: accountIndex - 1 });
-        previous_json_metadata = await getJsonMetadata(previousAccountName);
-        previousTx = JSON.parse(previous_json_metadata[metadataKey])
-    }
-
-    if (!transactionIsValid(previousTx.operations)) {
-        // console.log(`Transaction data from '${previousAccountName}' mismatch`);
-        throw new Error(`Transaction from '${previousAccountName}' invalid\noperations: '${JSON.stringify(previousTx.operations)}'`);
-    }
-    
-    if (transactionIsExpired(previousTx)) {
-        // console.log(`Transaction from '${previousAccountName}' expired, no more transactions to get`);
-        throw new Error(`Transactions from '${previousAccountName}' expired\nexpiration: '${previousTx.expiration}'`);
-    }
-
-    return previousTx;
-}
-
-async function getBlankTransaction() {
-    const expireTime = 1000 * 3000;
-    const globalProps = await getDynamicGlobalProperties();
-    const ref_block_num = globalProps.head_block_number & 0xFFFF;
-    const ref_block_prefix = Buffer.from(globalProps.head_block_id, 'hex').readUInt32LE(4);
-
-    return {
-        ref_block_num,
-        ref_block_prefix,
-        expiration: new Date(Date.now() + expireTime).toISOString().slice(0, -5),
-        operations: [],
-        extensions: []
-    };
-}
-
+//----------------------------------------------
+// operations helper functions
+//----------------------------------------------
+// get operations for all processes
 async function getOperations() {
     let ops = [];
     const sbdBalance = await getBalance(process.env.MULTISIG_ACCOUNT, 'SBD');
@@ -242,6 +227,7 @@ async function getOperations() {
     return ops;
 }
 
+// get account update operation
 function getAccountUpdateOperation(accountName, posting_json_metadata) {
     return [
         'account_update2',
@@ -253,6 +239,7 @@ function getAccountUpdateOperation(accountName, posting_json_metadata) {
     ];
 }
 
+// get transfer operation
 function getTransferOperation(amount, unit, from, to, memo = '') {
     return [
         'transfer',
@@ -265,7 +252,9 @@ function getTransferOperation(amount, unit, from, to, memo = '') {
     ];
 }
 
+// get order operation
 function getOrderOperation(account, sbdToSell, steemToBuy) {
+    // create unique order id from timestamp
     const orderId = Math.floor(Date.now() / 1000);
     const expireTime = 1000 * 120; // TODO without test 1000*3000
     return [
@@ -281,6 +270,7 @@ function getOrderOperation(account, sbdToSell, steemToBuy) {
     ];
 }
 
+// get STEEM amount to buy for given SBD amount
 async function getSteemToBuy(sbdToSell) {
     const orderBook = await getOrderBook();
     
@@ -300,6 +290,7 @@ async function getSteemToBuy(sbdToSell) {
         real_price = orderBook.asks[i].real_price;
         i++;
     }
+
     // console.log('real_price:', real_price);
     let price = parseFloat(real_price);
     // add a markup to sale in any case (0.5%)
@@ -309,6 +300,54 @@ async function getSteemToBuy(sbdToSell) {
     return parseInt(sbdToSell / price) / 10 ** precision;
 }
 
+//----------------------------------------------
+// multisig chaining functions
+//----------------------------------------------
+// get account name of previous account in multisig chain
+function getPreviousAccountName(context) {
+    return context.accountIndex > 0 ? context.multisigAccounts[context.accountIndex - 1] : null;
+}    
+
+// get transaction stored in json_metadata from previous or second last account
+async function getPreviousTransaction(context) {
+    const { accountIndex, metadataKey } = context;
+    let previousAccountName = getPreviousAccountName(context);
+    let previous_json_metadata = await getJsonMetadata(previousAccountName);
+
+    if (!previous_json_metadata[metadataKey]) {
+        // console.log(`No transaction data found in '${previousAccountName}'`);
+        throw new Error(`No transaction data found in '${previousAccountName}'`);
+    }    
+
+    let previousTx = JSON.parse(previous_json_metadata[metadataKey])
+
+    // if transaction is expired, get transaction from second last account - if exists
+    if (accountIndex > 1 && transactionIsExpired(previousTx)) {
+        console.log(`Transaction from '${previousAccountName}' expired, get transaction from second last account`);
+
+        previousAccountName = getPreviousAccountName({ ...context, accountIndex: accountIndex - 1 });
+        previous_json_metadata = await getJsonMetadata(previousAccountName);
+        previousTx = JSON.parse(previous_json_metadata[metadataKey])
+    }    
+
+    if (!transactionIsValid(previousTx.operations)) {
+        // console.log(`Transaction data from '${previousAccountName}' mismatch`);
+        throw new Error(`Transaction from '${previousAccountName}' invalid\noperations: '${JSON.stringify(previousTx.operations)}'`);
+    }    
+    
+    if (transactionIsExpired(previousTx)) {
+        // console.log(`Transaction from '${previousAccountName}' expired, no more transactions to get`);
+        throw new Error(`Transactions from '${previousAccountName}' expired\nexpiration: '${previousTx.expiration}'`);
+    }    
+
+    return previousTx;
+}    
+
+
+// ----------------------------------------------
+// transaction processing functions
+// ----------------------------------------------
+// create transaction for the first account in multisig chain (multisigAccount)
 function createPublishTx(context) {
     return new Promise(async (resolve, reject) => {
         
@@ -338,6 +377,7 @@ function createPublishTx(context) {
     })
 }
 
+// sign previous transaction for all accounts in multisig chain except the first and last account
 async function signPublishTx(context) {
     return new Promise(async (resolve, reject) => {
 
@@ -366,6 +406,7 @@ async function signPublishTx(context) {
     })
 }
 
+// sign previous transaction for the last account in multisig chain and broadcast it to blockchain
 async function signSendTx(context) {
     return new Promise(async (resolve, reject) => {
 
