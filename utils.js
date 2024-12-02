@@ -222,17 +222,17 @@ async function getOperations() {
             }
             if (sbdBalance > 0) {
                 // sell all SBD on internal market
-                const steemToBuy = await getSteemToBuy(0.001);
-                // ops.push(getOrderOperation(
-                //     process.env.MULTISIG_ACCOUNT,
-                //     sbdBalance,
-                //     steemToBuy)
-                // )
+                const steemToBuy = await getSteemToBuy(sbdBalance);
                 ops.push(getOrderOperation(
                     process.env.MULTISIG_ACCOUNT,
-                    0.001,
-                    steemToBuy) // TODO for testing
+                    sbdBalance,
+                    steemToBuy)
                 )
+                // ops.push(getOrderOperation(
+                //     process.env.MULTISIG_ACCOUNT,
+                //     0.001,
+                //     steemToBuy) // TODO for testing
+                // )
             }
             break;
     }
