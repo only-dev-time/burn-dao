@@ -34,16 +34,10 @@ const shouldProcessStart = (currentTime) => {
             // start processing 1 minute after the previous account
             return currentTime.minutes > accountIndex + 1;
         case 'burn':
-            // TODO for testing
-            // return true;
-            // ----------------
             // start processing at MARKET_MINUTE and after the previous account
             const marketMinute = parseInt(process.env.MARKET_MINUTE);
-            // TODO for testing
-            // const marketMinute = currentTime.minutes + (currentTime.minutes % 2 == 0 ? 0 : 1);
-            // ----------------
             const startSeconds = accountIndex * 15; // max 4 accounts in chain
-            const endSeconds = startSeconds + 11;
+            const endSeconds = startSeconds + 12;
             return currentTime.minutes == marketMinute && 
                 currentTime.seconds >= startSeconds && currentTime.seconds <= endSeconds;
     }

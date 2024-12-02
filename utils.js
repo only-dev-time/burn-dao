@@ -126,8 +126,7 @@ function transactionIsValid(operations) {
         case 'transfer':
             // allowed are only transfer operations
             // and to accounts specified in allowedAccounts
-            //const allowedAccounts = [process.env.SEND_TO, "steem.dao"];
-            const allowedAccounts = [process.env.SEND_TO, "moecki.tests"]; // TODO for testing
+            const allowedAccounts = [process.env.SEND_TO, "steem.dao"];
             return operations.every(operation => 
                 operation[0] === 'transfer' &&
                 allowedAccounts.includes(operation[1].to)
@@ -136,8 +135,7 @@ function transactionIsValid(operations) {
             // allowed are only transfer to null and limit_order_create operations
             return operations.every(operation => 
                 operation[0] === 'limit_order_create' ||
-                // (operation[0] === 'transfer' && operation[1].to === "null")
-                (operation[0] === 'transfer' && operation[1].to === "moecki.tests") // TODO for testing
+                (operation[0] === 'transfer' && operation[1].to === "null")
             );
     }
 }
@@ -169,19 +167,12 @@ async function getOperations() {
                 // transfer remaining amounts back to dao
                 const sbdToDao = sbdBalance - sbdToMarket;
                 if (sbdToDao > 0) {                    
-                    // ops.push(getTransferOperation(
-                    //     sbdToDao, 
-                    //     'SBD', 
-                    //     process.env.MULTISIG_ACCOUNT, 
-                    //     'steem.dao',
-                    //     'DAO amount not used for selling and burning')
-                    // )
                     ops.push(getTransferOperation(
-                        0.001, 
+                        sbdToDao, 
                         'SBD', 
                         process.env.MULTISIG_ACCOUNT, 
-                        'moecki.tests',
-                        'TEST: DAO amount not used for selling and burning (prod. receiver: @steem.dao)') // TODO for testing
+                        'steem.dao',
+                        'DAO amount not used for selling and burning')
                     )
                 }
             }
@@ -190,19 +181,12 @@ async function getOperations() {
             // transfer all STEEM to null
             const steemBalance = await getBalance(process.env.MULTISIG_ACCOUNT, 'STEEM');
             if (steemBalance > 0) {
-                // ops.push(getTransferOperation(
-                    //     steemBalance,
-                    //     'STEEM',
-                    //     process.env.MULTISIG_ACCOUNT,
-                    //     'null',
-                    //     'Burning STEEM from sold DAO funds')
-                    // )
                 ops.push(getTransferOperation(
                     steemBalance,
                     'STEEM',
                     process.env.MULTISIG_ACCOUNT,
-                    'moecki.tests',
-                    'TEST: Burning STEEM from sold SBD (prod. receiver: @null)') // TODO for testing
+                    'null',
+                    'Burning STEEM from sold DAO funds')
                 )
             }
             if (sbdBalance > 0) {
@@ -213,11 +197,6 @@ async function getOperations() {
                     sbdBalance,
                     steemToBuy)
                 )
-                // ops.push(getOrderOperation(
-                //     process.env.MULTISIG_ACCOUNT,
-                //     0.001,
-                //     steemToBuy) // TODO for testing
-                // )
             }
             break;
     }
@@ -256,7 +235,7 @@ function getTransferOperation(amount, unit, from, to, memo = '') {
 function getOrderOperation(account, sbdToSell, steemToBuy) {
     // create unique order id from timestamp
     const orderId = Math.floor(Date.now() / 1000);
-    const expireTime = 1000 * 120; // TODO without test 1000*3000
+    const expireTime = 1000 * 3000;
     return [
         'limit_order_create',
         {
