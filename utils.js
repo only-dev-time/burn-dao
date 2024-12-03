@@ -223,7 +223,7 @@ function getTransferOperation(amount, unit, from, to, memo = '') {
     return [
         'transfer',
         {
-            'amount': amount + ' ' + unit.toUpperCase(),
+            'amount': amount.toFixed(3) + ' ' + unit.toUpperCase(),
             'from': from,
             'memo': memo,
             'to': to
@@ -241,8 +241,8 @@ function getOrderOperation(account, sbdToSell, steemToBuy) {
         {
             'owner': account,
             'orderid': orderId,
-            'amount_to_sell': sbdToSell + ' SBD',
-            'min_to_receive': steemToBuy + ' STEEM',
+            'amount_to_sell': sbdToSell.toFixed(3) + ' SBD',
+            'min_to_receive': steemToBuy.toFixed(3) + ' STEEM',
             'fill_or_kill': false,
             'expiration': new Date(Date.now() + expireTime).toISOString().slice(0, -5)
         }
