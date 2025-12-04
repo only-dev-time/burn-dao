@@ -1,3 +1,7 @@
+# TEST BRANCH — FOR TEST PURPOSES ONLY
+
+> This branch contains the code for testing. Do NOT use in production.
+
 # SteemWitnesses MultiSig
 
 This tool makes a chaining of signature to use the multisig feature on Steem.
