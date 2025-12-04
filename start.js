@@ -1,3 +1,8 @@
+// ----------------------------------------------
+// THIS VERSION IS ONLY FOR TEST PURPOSES
+// DO NOT USE IN PRODUCTION
+// ----------------------------------------------
+
 require('dotenv').config();
 const { createPublishTx, signSendTx, signPublishTx } = require('./utils');
 

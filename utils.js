@@ -1,3 +1,9 @@
+// ----------------------------------------------
+// THIS VERSION IS ONLY FOR TEST PURPOSES
+// DO NOT USE IN PRODUCTION
+// ----------------------------------------------
+const RETURN_ACCOUNT_FOR_TEST = 'moecki.tests';
+
 const steem = require('steem');
 require('dotenv').config();
 
@@ -133,9 +139,10 @@ function transactionIsValid(operations) {
             );
         case 'burn':
             // allowed are only transfer to null and limit_order_create operations
+            // note: for test purposes transfer the amount to test account allowed
             return operations.every(operation => 
                 operation[0] === 'limit_order_create' ||
-                (operation[0] === 'transfer' && operation[1].to === "null")
+                (operation[0] === 'transfer' && operation[1].to === RETURN_ACCOUNT_FOR_TEST)
             );
     }
 }
@@ -165,13 +172,14 @@ async function getOperations() {
                     'DAO amount for selling and burning')
                 )
                 // transfer remaining amounts back to dao
+                // note: for test purposes transfer the amount to test account
                 const sbdToDao = sbdBalance - sbdToMarket;
                 if (sbdToDao > 0) {                    
                     ops.push(getTransferOperation(
                         sbdToDao, 
                         'SBD', 
                         process.env.MULTISIG_ACCOUNT, 
-                        'steem.dao',
+                        RETURN_ACCOUNT_FOR_TEST,
                         'DAO amount not used for selling and burning')
                     )
                 }
@@ -181,11 +189,12 @@ async function getOperations() {
             // transfer all STEEM to null
             const steemBalance = await getBalance(process.env.MULTISIG_ACCOUNT, 'STEEM');
             if (steemBalance > 0) {
+                // note: for test purposes transfer the amount to test account
                 ops.push(getTransferOperation(
                     steemBalance,
                     'STEEM',
                     process.env.MULTISIG_ACCOUNT,
-                    'null',
+                    RETURN_ACCOUNT_FOR_TEST,
                     'Burning STEEM from sold DAO funds')
                 )
             }
