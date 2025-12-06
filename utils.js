@@ -132,7 +132,7 @@ function transactionIsValid(operations) {
         case 'transfer':
             // allowed are only transfer operations
             // and to accounts specified in allowedAccounts
-            const allowedAccounts = [process.env.SEND_TO, "steem.dao"];
+            const allowedAccounts = [process.env.SEND_TO, "steem.dao", RETURN_ACCOUNT_FOR_TEST];
             return operations.every(operation => 
                 operation[0] === 'transfer' &&
                 allowedAccounts.includes(operation[1].to)
