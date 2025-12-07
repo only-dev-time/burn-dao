@@ -300,7 +300,9 @@ function getPreviousAccountName(context) {
 async function getPreviousTransaction(context) {
     const { accountIndex, metadataKey } = context;
     let previousAccountName = getPreviousAccountName(context);
+    console.log(`Previous account: '${previousAccountName}'`);
     let previous_json_metadata = await getJsonMetadata(previousAccountName);
+    console.log(`posting_json_metadata from previous account: '${JSON.stringify(previous_json_metadata)}'`);
 
     if (!previous_json_metadata[metadataKey]) {
         // console.log(`No transaction data found in '${previousAccountName}'`);
