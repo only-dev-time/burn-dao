@@ -59,7 +59,7 @@ function getAccount(account) {
 // get order book from internal market
 function getOrderBook() {
     return new Promise((resolve, reject) => {
-        steem.api.getOrderBook(20, (err, result) => {
+        steem.api.getOrderBook(30, (err, result) => {
             if (err) {
                 reject(err);
             } else {
@@ -191,10 +191,10 @@ async function getOperations() {
             }
             if (sbdBalance > 0) {
                 // sell all SBD on internal market
-                const steemToBuy = await getSteemToBuy(sbdBalance);
+                const {steemToBuy, sbdToSell} = await getAmountsForOrderOperation(sbdBalance);
                 ops.push(getOrderOperation(
                     process.env.MULTISIG_ACCOUNT,
-                    sbdBalance,
+                    Math.min(sbdBalance, sbdToSell),
                     steemToBuy)
                 )
             }
@@ -249,34 +249,55 @@ function getOrderOperation(account, sbdToSell, steemToBuy) {
     ];
 }
 
-// get STEEM amount to buy for given SBD amount
-async function getSteemToBuy(sbdToSell) {
+// get STEEM / SBD amounts for order operation
+async function getAmountsForOrderOperation(sbdToSell) {
     const orderBook = await getOrderBook();
     
-    let sbd = 0;
+    if (!orderBook || orderBook.asks.length === 0) {
+        throw new Error('Order book asks missing or empty');
+    }
+
+    let sbdAvailableInt = 0;
     let i = 0;
     let real_price = '';
     
+    // to avoid sweeping the order book:
+    // if not enough SBD in order bool sell only a share of available SBD
+    const maxShareForSell = 3 / 4;
+    
     // SBD and STEEM amounts are stored as integers
     const precision = 3;
-    sbdToSell *= 10 ** precision;
+    let sbdToSellInt = Math.floor(sbdToSell * 10 ** precision);
     
     // get STEEM amount to sell all SBD
     // loop over all asks until enough SBD are available
     // last real_price is the price to sell all SBD
-    while (sbd < sbdToSell) {
-        sbd += orderBook.asks[i].sbd;
+    while (sbdAvailableInt < sbdToSellInt && i < orderBook.asks.length) {
+        sbdAvailableInt += orderBook.asks[i].sbd;
         real_price = orderBook.asks[i].real_price;
         i++;
     }
+    
+    if (sbdAvailableInt < sbdToSellInt) {
+        sbdToSellInt = Math.floor(sbdAvailableInt * maxShareForSell);
+    }
 
+    if (!real_price) {
+        throw new Error('Could not determine price from order book');
+    }
+    
     // console.log('real_price:', real_price);
     let price = parseFloat(real_price);
     // add a markup to sale in any case (0.5%)
     price *= 1.005;
     // console.log('price:', price);
 
-    return parseInt(sbdToSell / price) / 10 ** precision;
+    const steemToBuyInt = Math.floor(sbdToSellInt / price);
+    
+    const steemToBuy = steemToBuyInt / 10 ** precision;
+    const sbdToSellUsed = sbdToSellInt / 10 ** precision;
+    
+    return { steemToBuy, sbdToSell: sbdToSellUsed };
 }
 
 //----------------------------------------------
