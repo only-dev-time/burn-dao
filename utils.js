@@ -1,3 +1,9 @@
+// ----------------------------------------------
+// THIS VERSION IS ONLY FOR TEST PURPOSES
+// DO NOT USE IN PRODUCTION
+// ----------------------------------------------
+const RETURN_ACCOUNT_FOR_TEST = 'moecki.tests';
+
 const steem = require('steem');
 require('dotenv').config();
 
@@ -129,16 +135,17 @@ function transactionIsValid(operations) {
         case 'transfer':
             // allowed are only transfer operations
             // and to accounts specified in allowedAccounts
-            const allowedAccounts = [process.env.SEND_TO, 'steem.dao', 'null'];
+            const allowedAccounts = [process.env.SEND_TO, 'steem.dao', 'null', RETURN_ACCOUNT_FOR_TEST];
             return operations.every(operation => 
                 operation[0] === 'transfer' &&
                 allowedAccounts.includes(operation[1].to)
             );
         case 'burn':
             // allowed are only transfer to null and limit_order_create operations
+            // note: for test purposes transfer the amount to test account allowed
             return operations.every(operation => 
                 operation[0] === 'limit_order_create' ||
-                (operation[0] === 'transfer' && operation[1].to === "null")
+                (operation[0] === 'transfer' && operation[1].to === RETURN_ACCOUNT_FOR_TEST)
             );
     }
 }
@@ -171,21 +178,23 @@ async function getOperations() {
                 }
                 if (sbdToNull > 0) {
                     // transfer AMOUNT_SBD_TO_NULL to null account
+                    // note: for test purposes transfer the amount to test account
                     ops.push(getTransferOperation(
                         sbdToNull, 
                         'SBD', 
                         process.env.MULTISIG_ACCOUNT, 
-                        'null',
+                        RETURN_ACCOUNT_FOR_TEST,
                         'DAO amount for direct burning')
                     )
                 }
                 if (sbdToDao > 0) {                    
                     // transfer remaining amount back to dao
+                    // note: for test purposes transfer the amount to test account
                     ops.push(getTransferOperation(
                         sbdToDao, 
                         'SBD', 
                         process.env.MULTISIG_ACCOUNT, 
-                        'steem.dao',
+                        RETURN_ACCOUNT_FOR_TEST,
                         'DAO amount not used for selling and burning (return to DAO)')
                     )
                 }
@@ -194,11 +203,12 @@ async function getOperations() {
         case 'burn':
             // transfer all STEEM to null
             if (steemBalance > 0) {
+                // note: for test purposes transfer the amount to test account
                 ops.push(getTransferOperation(
                     steemBalance,
                     'STEEM',
                     process.env.MULTISIG_ACCOUNT,
-                    'null',
+                    RETURN_ACCOUNT_FOR_TEST,
                     'Burning STEEM from sold DAO funds')
                 )
             }
@@ -368,7 +378,9 @@ function getPreviousAccountName(context) {
 async function getPreviousTransaction(context) {
     const { accountIndex, metadataKey } = context;
     let previousAccountName = getPreviousAccountName(context);
+    console.log(`Previous account: '${previousAccountName}'`);
     let previous_json_metadata = await getJsonMetadata(previousAccountName);
+    console.log(`posting_json_metadata from previous account: '${JSON.stringify(previous_json_metadata)}'`);
 
     if (!previous_json_metadata[metadataKey]) {
         // console.log(`No transaction data found in '${previousAccountName}'`);
