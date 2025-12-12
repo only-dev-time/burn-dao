@@ -49,7 +49,8 @@ Without Docker only one process can started, because the process expects a file 
 - POSTING_KEY=XXXX                      #current account posting key (used to update the json_metadata field)
 - ACTIVE_KEY=XXXX                       #current account active key (used to sign the transaction)
 - MULTISIG_ACCOUNTS=moecki.multisig moecki.signer1 moecki.signer2 moecki.signer3                          #list of accounts used for chaining
-- AMOUNT_SBD=0.001                      #amount of SBD to send (remaining SBD will be transferred back to DAO)
+- AMOUNT_SBD_TO_MARKET=0.001            #amount of SBD to send to the account for the burn process
+- AMOUNT_SBD_TO_NULL=0.001              #amount of SBD to send to `null` (unused SBD will be transferred back to DAO)
 - SEND_TO=moecki.burn                   #to whom the funds should be send
 
 ### burn process
