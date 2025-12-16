@@ -86,13 +86,13 @@ async function getJsonMetadata(accountName) {
 }
 
 // get account balance from blockchain
-async function getBalance(accountName, unit) {
+async function getBalances(accountName) {
     const [account] = await getAccount(accountName)
 
-    const key = unit === 'STEEM' ? 'balance' : 'sbd_balance';
-    const balance = account[key].split(' ')[0]
+    const sbdBalance = parseFloat(account['sbd_balance'].split(' ')[0]);
+    const steemBalance = parseFloat(account['balance'].split(' ')[0]);
     
-    return parseFloat(balance);
+    return { sbdBalance, steemBalance };
 }
 
 // ----------------------------------------------
@@ -116,17 +116,20 @@ async function getBlankTransaction() {
 
 // check if transaction is valid for the purpose of selling and burning
 function transactionIsValid(operations) {
-    // max 2 operations allowed
-    // transfer: transfer to market account and transfer back to dao account
+    // transfer: max 3 operations allowed
+    // burn: max 2 operations allowed
+    // transfer: transfer to market account, to null and transfer back to dao account
     // burn: transfer to null account and sell SBD
-    if (operations.length > 2) {
+    if (operations.length > 3 ||
+        (process.env.PROCESS_TYPE === 'burn' && operations.length > 2)
+    ) {
         return false;
     }
     switch (process.env.PROCESS_TYPE) {
         case 'transfer':
             // allowed are only transfer operations
             // and to accounts specified in allowedAccounts
-            const allowedAccounts = [process.env.SEND_TO, "steem.dao"];
+            const allowedAccounts = [process.env.SEND_TO, 'steem.dao', 'null'];
             return operations.every(operation => 
                 operation[0] === 'transfer' &&
                 allowedAccounts.includes(operation[1].to)
@@ -135,7 +138,7 @@ function transactionIsValid(operations) {
             // allowed are only transfer to null and limit_order_create operations
             return operations.every(operation => 
                 operation[0] === 'limit_order_create' ||
-                (operation[0] === 'transfer' && operation[1].to === "null")
+                (operation[0] === 'transfer' && operation[1].to === 'null')
             );
     }
 }
@@ -151,36 +154,46 @@ function transactionIsExpired(transaction) {
 // get operations for all processes
 async function getOperations() {
     let ops = [];
-    const sbdBalance = await getBalance(process.env.MULTISIG_ACCOUNT, 'SBD');
+    const { sbdBalance, steemBalance } = await getBalances(process.env.MULTISIG_ACCOUNT);
     switch (process.env.PROCESS_TYPE) {
         case 'transfer':
             if (sbdBalance > 0) {
-                // transfer AMOUNT_SBD to market account
-                const sbdToMarket = Math.min(sbdBalance, parseFloat(process.env.AMOUNT_SBD));
-                ops.push(getTransferOperation(
-                    sbdToMarket, 
-                    'SBD', 
-                    process.env.MULTISIG_ACCOUNT, 
-                    process.env.SEND_TO,
-                    'DAO amount for selling and burning')
-                )
-                // transfer remaining amounts back to dao
-                const sbdToDao = sbdBalance - sbdToMarket;
+                const {sbdToMarket, sbdToNull, sbdToDao} = getSbdAmountsForTransferProcess(sbdBalance);
+                if (sbdToMarket > 0) {
+                    // transfer AMOUNT_SBD_TO_MARKET to market account
+                    ops.push(getTransferOperation(
+                        sbdToMarket, 
+                        'SBD', 
+                        process.env.MULTISIG_ACCOUNT, 
+                        process.env.SEND_TO,
+                        'DAO amount for selling and burning')
+                    )
+                }
+                if (sbdToNull > 0) {
+                    // transfer AMOUNT_SBD_TO_NULL to null account
+                    ops.push(getTransferOperation(
+                        sbdToNull, 
+                        'SBD', 
+                        process.env.MULTISIG_ACCOUNT, 
+                        'null',
+                        'DAO amount for direct burning')
+                    )
+                }
                 if (sbdToDao > 0) {                    
+                    // transfer remaining amount back to dao
                     ops.push(getTransferOperation(
                         sbdToDao, 
                         'SBD', 
                         process.env.MULTISIG_ACCOUNT, 
                         'steem.dao',
-                        'DAO amount not used for selling and burning')
+                        'DAO amount not used for selling and burning (return to DAO)')
                     )
                 }
             }
             break;
         case 'burn':
-            // transfer all STEEM to null
-            const steemBalance = await getBalance(process.env.MULTISIG_ACCOUNT, 'STEEM');
             if (steemBalance > 0) {
+                // transfer all STEEM to null
                 ops.push(getTransferOperation(
                     steemBalance,
                     'STEEM',
@@ -190,7 +203,7 @@ async function getOperations() {
                 )
             }
             if (sbdBalance > 0) {
-                // sell all SBD on internal market
+                // try to sell all SBD on internal market
                 const {steemToBuy, sbdToSell} = await getAmountsForOrderOperation(sbdBalance);
                 ops.push(getOrderOperation(
                     process.env.MULTISIG_ACCOUNT,
@@ -298,6 +311,49 @@ async function getAmountsForOrderOperation(sbdToSell) {
     const sbdToSellUsed = sbdToSellInt / 10 ** precision;
     
     return { steemToBuy, sbdToSell: sbdToSellUsed };
+}
+
+// get shares of SBD balance for transfer process
+// 1: SBD to market
+// 2: SBD to null
+// 3: SBD back to dao
+function getSbdAmountsForTransferProcess(sbdBalance) {
+    // calculate with integers
+    const precision = 3;
+    const factor = 10 ** precision;
+
+    // helpers to convert float to int and back
+    const toInt = (n) => Math.floor(n * factor);
+    const toFloat = (i) => Number((i / factor).toFixed(precision));
+
+    const envSbdToMarketInt = toInt(parseFloat(process.env.AMOUNT_SBD_TO_MARKET));
+    if (Number.isNaN(envSbdToMarketInt)) {
+        throw new Error('env variable AMOUNT_SBD_TO_MARKET is missing or not a number');
+    }
+    const envSbdToNullInt = toInt(parseFloat(process.env.AMOUNT_SBD_TO_NULL));
+    if (Number.isNaN(envSbdToNullInt)) {
+        throw new Error('env variable AMOUNT_SBD_TO_NULL is missing or not a number');
+    }
+    const sbdBalanceInt = toInt(sbdBalance);
+
+    let sbdUnusedInt = sbdBalanceInt;
+
+    // first priority: AMOUNT_SBD_TO_MARKET
+    const sbdToMarketInt = Math.min(sbdBalanceInt, envSbdToMarketInt);
+    sbdUnusedInt -= sbdToMarketInt;
+
+    // second priority: AMOUNT_SBD_TO_NULL
+    const sbdToNullInt = Math.min(sbdUnusedInt, envSbdToNullInt);
+    sbdUnusedInt -= sbdToNullInt;
+
+    // remaining SBD back to dao
+    const sbdToDaoInt = Math.max(0, sbdUnusedInt);
+    
+    return { 
+        sbdToMarket: toFloat(sbdToMarketInt), 
+        sbdToNull: toFloat(sbdToNullInt), 
+        sbdToDao: toFloat(sbdToDaoInt)
+    };
 }
 
 //----------------------------------------------
