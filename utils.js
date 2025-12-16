@@ -118,7 +118,7 @@ async function getBlankTransaction() {
 function transactionIsValid(operations) {
     // transfer: max 3 operations allowed
     // burn: max 2 operations allowed
-    // transfer: transfer to market account and transfer back to dao account
+    // transfer: transfer to market account, to null and transfer back to dao account
     // burn: transfer to null account and sell SBD
     if (operations.length > 3 ||
         (process.env.PROCESS_TYPE === 'burn' && operations.length > 2)
@@ -138,7 +138,7 @@ function transactionIsValid(operations) {
             // allowed are only transfer to null and limit_order_create operations
             return operations.every(operation => 
                 operation[0] === 'limit_order_create' ||
-                (operation[0] === 'transfer' && operation[1].to === "null")
+                (operation[0] === 'transfer' && operation[1].to === 'null')
             );
     }
 }
@@ -192,8 +192,8 @@ async function getOperations() {
             }
             break;
         case 'burn':
-            // transfer all STEEM to null
             if (steemBalance > 0) {
+                // transfer all STEEM to null
                 ops.push(getTransferOperation(
                     steemBalance,
                     'STEEM',
@@ -203,7 +203,7 @@ async function getOperations() {
                 )
             }
             if (sbdBalance > 0) {
-                // sell all SBD on internal market
+                // try to sell all SBD on internal market
                 const {steemToBuy, sbdToSell} = await getAmountsForOrderOperation(sbdBalance);
                 ops.push(getOrderOperation(
                     process.env.MULTISIG_ACCOUNT,
